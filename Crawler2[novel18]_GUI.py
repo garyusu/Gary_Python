@@ -3,7 +3,8 @@ from turtle import color
 import requests  #用於get請求
 from bs4 import BeautifulSoup as bs #網頁分析
 from os import mkdir #建資料夾(目錄)
-import subprocess #打開資料夾
+import subprocess   #打開資料夾
+import shutil       #刪除資料夾及內容
 
 import tkinter as tk
 import re
@@ -28,7 +29,7 @@ headers={ #可能需改動項目2
 }  
 
 #從網頁抓取小說
-def get_novel(url, novel_id, isFileNum, webSelect): #傳入(主址,小說編號)
+def get_novel(url, novel_id, isFileNum): #傳入(主址,小說編號)
     url_novel = url + novel_id #小說目錄連結
 
     req = requests.get(url_novel, headers = headers)
@@ -50,23 +51,31 @@ def get_novel(url, novel_id, isFileNum, webSelect): #傳入(主址,小說編號)
     #建立小說資料夾
     #資料夾名 若 資料夾名+檔名 太長，可能導致錯誤
     novel_writerName = re.sub(r"[\n(作者：)　]+", "", novel_writerName) #消除多餘的字元
-    dirName = "[日][" + novel_writerName +']'+ novel_title[0].text
+    novel_dirName = toFileName( "[日][" + novel_writerName +']'+ novel_title[0].text )
     
     #指定下載路徑
     folderName = ''
-    if webSelect: # T:成為小說家吧！  F:夜曲小說
+    if 'ncode' in url:  # 成為小說家吧！ 
         folderName = '[成為小說家吧！]'
-    else:
+    else:               # 夜曲小說 網址包含'novel18'
         folderName = '[夜曲小說]'
+    
+    # 指定根目錄 [成為小說家吧！]／[夜曲小說] 下
+    rootDir = 'C:/Users/garyu/OneDrive/ebook/YD/'+ folderName
     # dirName = novel_title[0].text #若 資料夾名+檔名 太長導致錯誤，切換到這個
-    dirName = 'C:/Users/garyu/OneDrive/ebook/YD/'+ folderName +'/'+ toFileName(dirName)  +" [更新至" + str(len(novel_list)) +']'
+    dirName = rootDir +'/'+ novel_dirName  +" [更新至" + str(len(novel_list)) +']'
+    
+    # 先將舊的小說資料夾改名，等後續建立新的後再移除 (欲查找的目錄, 關鍵字)
+    rename_folders_with_keyword( rootDir, toFileName( novel_title[0].text ) )
+    
     if not os.path.isdir(dirName): #檢查是否已存在
         mkdir(dirName)#建新資料夾，預設在工作區目錄
     print('\n小說目錄：\n' + dirName)
 
     bigChapterPaths = []
     num = 1 #大章節編號
-    #大章節
+
+    ##大章節##
     for chapter in bigChapter_list:
         #找出所有大章節最後一章(=大章上一節點)
         ch = chapter.find_previous_sibling('dl')
@@ -82,28 +91,25 @@ def get_novel(url, novel_id, isFileNum, webSelect): #傳入(主址,小說編號)
     
     isBigChapter = len(bigChapter_list) > 0 #有無大章節
     tmp_dirName = dirName                  
-    a = 0 #大章節index，從0開始
-    b = 1 #檔案開頭編號(選取 "是")
+    a = 0   #大章節index，從0開始
+    b = 1   #檔案開頭編號(選擇了 加上編號：是)
     headNumStr = '' #章節開頭編號
-    c = 1 #章節開頭編號加上小數點的計數
-    # print('\n檔名：',end="")
+    c = 1   #章節開頭編號加上小數點的計數
     for nl in novel_list: #逐一取得章節
         nl_text = toFileName(nl.text) #章節名
 
-        #有大章節的話，將檔案放到各大章資料夾
+        # 有大章節的話，將檔案放到各大章資料夾
         if isBigChapter:
-            if bigChapter_firstChild[a].text == nl.text:    #大章第一章
+            if bigChapter_firstChild[a].text == nl.text:    #大章第一章，重置檔案開頭編號
                 tmp_dirName = bigChapterPaths[a]
-                # print("@@@@@@@"+ bigChapter_firstChild[a].text +" = " +nl.text)
                 print('\n章節標題'+str(a+1)+'：'+bigChapter_list[a].text)
-                b = 1   #重置 檔案開頭編號
+                b = 1 
                 
-            if bigChapter_lastChild[a] != '':               #大章最後章
+            if bigChapter_lastChild[a] != '':               #[大章最後章]以外的，將大章計數+1
                 if bigChapter_lastChild[a].text == nl.text:
-                    # print("@@@@@@@"+ bigChapter_lastChild[a].text +" = " +nl.text)
                     a+=1
         
-        #進章節連結
+        # 進章節連結
         url_href = url + nl['href'] #章節連結
         r2 = requests.get(url_href, headers = headers)
         r2.encoding = r2.apparent_encoding #轉碼
@@ -129,13 +135,16 @@ def get_novel(url, novel_id, isFileNum, webSelect): #傳入(主址,小說編號)
                 sr = remove_tag(str(s)) #移除tag
                 txt.write(sr + '\n')
         b = b + 1
-    # os.rename(dirName + '/', dirName + " [更新至" + str(b-1) + ']/')
     print("下載完畢!")
+    
+    # 刪除舊資料夾
+    delete_folders_with_keyword( rootDir, 'tmp' )
 
     # 使用subprocess打開資料夾，並顯示在最上層
     subprocess.Popen('explorer /select,"' + dirName.replace('/', '\\') + '\\0-首頁導言.txt"')
+# END ==============================================
 
-#檢查特殊字元，用全形取代特殊字元，避免不符檔名規則
+# 檢查特殊字元，用全形取代特殊字元，避免不符檔名規則
 def toFileName(string):
     string = full2half(string)            #全形轉半形
     string = re.sub(r'^\s+?',"",string)   #消除前面空白
@@ -150,7 +159,7 @@ def toFileName(string):
     return string.replace('―','—')
     # return string
 
-#消除<Tag>及強調符(・・) *?為非貪婪匹配，小說內文用
+# 消除<Tag>及強調符(・・) *?為非貪婪匹配，小說內文用
 def remove_tag(text): 
     text = re.sub(r'<.*?>',"",text)
     text = re.sub(r'\((・+?)\)',"",text)
@@ -160,43 +169,58 @@ def get_novel_number(url): #從輸入網址分割出編號部分(正則表達式
     r = re.search(r"/n\d{4}[A-z]{2}/$", url, re.I)
     return r.group()
 
-#return 大章路徑
+# return 大章路徑
 def getChapterPath(dirName, num, chapter):
     chapterPath = dirName + '/' + str(num) + "." + toFileName(chapter.text)
     createFolder(chapterPath)
     return chapterPath
 
-#建立大章節資料夾(路徑名, 章節節點)
+# 建立大章節資料夾(路徑名, 章節節點)
 def createFolder(chapterPath):
     if not os.path.isdir(chapterPath): #檢查是否已存在
         mkdir(chapterPath)#建新資料夾
 
-#取得指定標籤 (解析後的網頁Data, CSS選取器規則)
+# 取得指定標籤 (解析後的網頁Data, CSS選取器規則)
 def getSoupTag(soup ,selectStr):
     return soup.select(selectStr)
 
-#全形轉半形
+# 全形轉半形
 def full2half(c: str) -> str:
     return unicodedata.normalize("NFKC", c)
 
-#擷取開頭，判斷是否數字
+# 判斷字串是否數字
 def headIsInt(string):
-    i = string[0:1].isnumeric() #Ture/False
-    # if i:
-    #     print(string[0:1] + '：是數字')
-    # else:
-    #     print(string[0:1] + '：不是數字')
-    return i
+    return string[:1].isnumeric() #Ture/False
 
-#取得章節開頭的數字
+# 取得章節開頭的數字 (章節完整名)
 def getHeadInt(string):
-    i = ""
+    result = ''
     for s in string:
         if not headIsInt(s):
             break
-        i += s   
-    # print("取得的數字為：" + i)
-    return i
+        result += s
+    return result
+
+# 將含有關鍵字的資料夾改名為tmp開頭 (根目錄路徑, 關鍵字)
+def rename_folders_with_keyword(root_folder, keyword):
+    for folder_name in os.listdir(root_folder):
+        folder_path = os.path.join(root_folder, folder_name)
+        if os.path.isdir(folder_path) and keyword in folder_name:
+            new_folder_path = 'tmp' + folder_path
+            # 資料夾改名
+            os.rename(folder_path, new_folder_path)
+            print("資料夾改名:\n\t原本", folder_path)
+            print("\t改為", new_folder_path)
+
+# 刪除暫存資料夾(根目錄路徑, 關鍵字)
+def delete_folders_with_keyword(root_folder):
+    for folder_name in os.listdir(root_folder):
+        folder_path = os.path.join(root_folder, folder_name)
+        if os.path.isdir(folder_path) and folder_name[:3] == 'tmp':
+            # 遞迴刪除資料夾及其內容
+            shutil.rmtree(folder_path)
+            print("刪除資料夾:", folder_path)
+
 
 #GUI ===============
 def new_window():  
@@ -222,17 +246,6 @@ def new_window():
     myradiobutton2.select() #選取狀態
 
     # ---------- row=1 ---------- 
-    tk.Label(window, relief="raised", text='來自哪個網站：').grid(row=2, column=0)
-    #單選按鈕RDO [成為小說家吧！]/[夜曲小說]
-    var2 = tk.IntVar()
-    #回傳選取 T or F，切換時觸發
-    def selection2(): 
-        return False if var2.get()==0 else True
-    myradiobutton3 = tk.Radiobutton(window, text='成為小說家吧！', variable=var2, value=1, command=selection2)
-    myradiobutton3.grid(row=2, column=1, sticky='W')
-    myradiobutton4 = tk.Radiobutton(window, text='夜曲小說', variable=var2, value=0, command=selection2)
-    myradiobutton4.grid(row=2, column=2, sticky='W')
-    myradiobutton4.select() #選取狀態
     
     # ---------- row=4 ---------- 
     mylabel = tk.Label(window, text='請輸入網址：')
@@ -258,7 +271,7 @@ def new_window():
 
             #call get_novel開始抓取小說
             mylabel_start.config(text='正在下載...')
-            get_novel(url, get_novel_number(output_website), selection(), selection2()) 
+            get_novel( url, get_novel_number(output_website), selection() ) 
             mylabel_start.config(text='下載完畢!!')
     
     # ---------- row=7 ----------
