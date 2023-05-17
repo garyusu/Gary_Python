@@ -3,10 +3,13 @@ from turtle import color
 import requests  #用於get請求
 from bs4 import BeautifulSoup as bs #網頁分析
 from os import mkdir #建資料夾(目錄)
+import subprocess #打開資料夾
+
 import tkinter as tk
 import re
 import os
 import unicodedata
+
 
 url = "https://novel18.syosetu.com" #小說18主頁
 
@@ -15,13 +18,13 @@ cookie = 'over18=yes;'
 
 headers={ #可能需改動項目2
     'Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
-    'Accept-Encoding':'gzip, deflate, br', 
-    'Accept-Language':'zh-TW,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6,ja;q=0.5',
+    # 'Accept-Encoding':'gzip, deflate, br', 
+    # 'Accept-Language':'zh-TW,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6,ja;q=0.5',
     # 'Host': 'ncode.syosetu.com',  #有時會改這個
     # 'Host': 'novel18.syosetu.com', 
     'Cookie':cookie,
     'Upgrade-Insecure-Requests':'1',#不用改
-    'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.5112.81 Safari/537.36 Edg/104.0.1293.47'
+    'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36 Edg/113.0.1774.42'
 }  
 
 #從網頁抓取小說
@@ -74,7 +77,7 @@ def get_novel(url, novel_id, isFileNum, webSelect): #傳入(主址,小說編號)
     bigChapter_lastChild.append('')           #因為末尾會少bigChapter_firstChild一個，所以加上空字串
     
     #小說首頁簡介
-    with open(dirName + '/' + '0-首頁導言.txt', 'a', encoding="utf-8") as f:
+    with open(dirName + '/' + '0-首頁導言.txt', 'w', encoding="utf-8") as f:
         f.write(remove_tag(str(novel_ex[0])))
     
     isBigChapter = len(bigChapter_list) > 0 #有無大章節
@@ -120,7 +123,7 @@ def get_novel(url, novel_id, isFileNum, webSelect): #傳入(主址,小說編號)
                 ch_name = headNumStr + nl_text + '.txt' 
         print(ch_name)
 
-        with open(tmp_dirName + '/' + ch_name, 'a', encoding="utf-8") as txt:
+        with open(tmp_dirName + '/' + ch_name, 'w', encoding="utf-8") as txt:
             txt.write(nl.text + "\t" + po_date[b-1].text + '\n\n\n') #寫入開頭標題
             for s in soup2: #逐行處理
                 sr = remove_tag(str(s)) #移除tag
@@ -128,6 +131,9 @@ def get_novel(url, novel_id, isFileNum, webSelect): #傳入(主址,小說編號)
         b = b + 1
     # os.rename(dirName + '/', dirName + " [更新至" + str(b-1) + ']/')
     print("下載完畢!")
+
+    # 使用subprocess打開資料夾，並顯示在最上層
+    subprocess.Popen('explorer /select,"' + dirName.replace('/', '\\') + '\\0-首頁導言.txt"')
 
 #檢查特殊字元，用全形取代特殊字元，避免不符檔名規則
 def toFileName(string):
@@ -202,7 +208,7 @@ def new_window():
     #元件類別(父類別, 選擇性參數1 = 值1, ...) ，建立元件
     #元件.grid(row=列數, column=行數) ，設定(相對)位置
     # ---------- row=0 ---------- 
-    tk.Label(window, relief="raised", text='加上編號：\n(有章節標題請選取"是")').grid(row=0, column=0)
+    tk.Label(window, relief="raised", text='加上編號：\n(有大章標題請選取"是")').grid(row=0, column=0)
 
     #單選按鈕RDO 是/否
     var = tk.IntVar()

@@ -13,6 +13,7 @@ import re
 from docx import Document
 from docx.shared import Pt, Cm #處理大小，字體或空間
 from docx.oxml.ns import qn
+from PIL import Image           #處理圖片規格
 
 import unicodedata #全形轉半形
 
@@ -22,11 +23,13 @@ def getReq(url): #傳入
     # url = 'https://www.2dfan.com/topics/10046/page/8'
     
     #可能需改動項目1
-    cookies = {'__bid_n':'186c15da74c74505484207',
-               'FPTOKEN':'/EtsdlTNsKk8w7Q5RB0lbq8dKAGllhckubqeKTJCv3CFEWJOPyTmCrySEcpTeYJ8BuPkXzOQY96PIDMxOmUIr5TgPongL1gadLxW429rcKJ92vNQ0jOBXUu7Kb/ZVz+tuVrvdjIaAYdc7R424IAy5tYOkMez6xtxm4JG19/tAAf50Nd0kU0/x5w/Ijfabl8C8xTg9W6viwdihBYqwW7d3+bIr6a/NPhiez2QthAWImMh76V/RU3C1qrA3rCAs4z3mdIgSP3qfMzliyBNzhhImcW0DdNyq/gfw6Fb8Xfk9sE3ncxaV6sg89udzXO6i1YkuPFXWBsusgBGaFVrPFS7qpwpb71QJNdsuMd7ERLrSkEfyTmbwQwVNKlNY/YIhgJKICETHF0k8wIDb2VcMPWvZQ==|B6ozropGKhVaplKUt1f7alPHS1jirkLAQoMpx0JHsZc=|10|62594156f721d142b5dd6dbfff1b62c2',
-               'Hm_lvt_79251201618e9337c1169fef9b3e4786':'1680664870,1681084470,1681256314',
-               '_project_hgc_session':'cFNvaFNWbEc3U05rblgzZ09hdW44NmhmZ2dMbzYyVzc2TnNtWS93ZUlMdm9sNUloeHlHRkNSM0hmK2FsaHdoKzVSNWtzNXpxN1piUXdTOFJYUnhZTlZpbWh1d3o5cVNGRDZwclhLdHMvRkVKYUVTd2Z3dlo4V05lS3dQZDhxaFFPazJCZXZIbklzNlYwNDdacmpvMUhxcjNyYTB4a1NpY0RtZDd0NkhlZHZLOTJJNG1CcWVXZ0UxNGcwUGpjLzJHLS1BanhyQnZKM253a09TaVgxd21PeXpBPT0=--5eaf141c96122350b41e19f5e890ad31d61bc5b3',
-               'Hm_lpvt_79251201618e9337c1169fef9b3e4786':'1682242371'}
+    cookies = {
+        "__bid_n": "186c15da74c74505484207",
+        "remember_me_token": "eyJfcmFpbHMiOnsibWVzc2FnZSI6IkluQXRZMEo2YzBGQmRWaDFWamQwVjJzMVVWWllJZz09IiwiZXhwIjoiMjAyMy0wNy0zMFQxNjozODo1NS44NzdaIiwicHVyIjpudWxsfX0%3D--5d28c2540a857ba1cd45e816048812a089b4a65c",
+        "Hm_lvt_79251201618e9337c1169fef9b3e4786": "1682702013,1682777534,1682903386,1683982331",
+        "_project_hgc_session": "dWxlYmNLODUySHVZUWczQW1nb3FYeGZzb2MzZGxqc0JKS0RiWWVWRWkrNHcyQmRiOTZzRmUwTlBWcTRBcURoYU4yeG4xWE44L0Jmc2ZhL0QvZjA4ZnE1NXh0RWhtd1FtYnRoUktsUUhKSmR4ZnRmM1YwT2UrSVNXSDVlcnd1emhZUktrL3NwWVovMjlyQlJEcGJGNFFPemgwMk1wRkE5K1Vib2lTUWZKZHB1ZitkVWVld1VwU0dWSjBucmp1OVlFLS1hR2t3WmhZVG93RHF1YXpOWmdERDZRPT0%3D--0a5aa43cc538a4c70b95b11c48f7e8a7303e1e91",
+        "Hm_lpvt_79251201618e9337c1169fef9b3e4786": "1684244906"
+    }
 
     headers={ #默認
         'Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
@@ -100,6 +103,10 @@ def newDocx():
     section.top_margin = Cm(1.27)
     section.bottom_margin = Cm(1.27)
 
+    #A4紙張大小
+    section.page_height = Cm(29.7)  # 高
+    section.page_width = Cm(21.0)   # 寬
+
     document.styles['Normal'].font.name = u'微軟正黑體'  # 字型
     document.styles['Normal']._element.rPr.rFonts.set(qn('w:eastAsia'), u'微軟正黑體')  # 中文字型需再新增這個設定
     document.styles['Normal'].font.size = Pt(12)  # 字號 四號對應14
@@ -164,8 +171,8 @@ def editDocx(url, req, soup, document, tagsList):
                     f.write(response)
                     f.close()
 
-                # 将图片插入
-                document.add_picture('tmpPic.jpg')
+                # 插入圖片，並調整大小 (document, 圖片路徑)
+                insert_image_with_resizing(document, 'tmpPic.jpg')
                 
     #介紹標題
     titleName = soup.select('.block > div > h3')[0].text
@@ -277,7 +284,36 @@ def removeTag(soup, tagName, key, value):
             else: 
                 tag.extract()
 
+def insert_image_with_resizing(doc, image_path):
+    
+    # A4編輯區長寬
+    max_height = Cm(27.16)
+    max_width = Cm(18.46)
+
+    # 取圖片的長寬
+    img = Image.open(image_path)
+    width, height = img.size
+    # 像素轉cm
+    width = Cm(width / 28.35)
+    height = Cm(height/ 28.35)
+    # 計算長寬比例
+    scale = width/height
+    
+    # 若圖片超過邊界，縮小至符合邊界
+    # 不考慮的情境：寬度符合邊界後，高度仍超過邊界
+    if max_width < width:       #寬度符合邊界
+        new_height = max_width / scale
+        new_width = max_width
+    elif max_height < height:   #高度符合邊界
+        new_height = max_height
+        new_width = max_height * scale
+    else:                       #不變
+        new_height = height
+        new_width = width
+    
+    # 插入圖片並設置長寬
+    doc.add_picture(image_path, width=new_width, height=new_height)
+
+
 if __name__=='__main__':
     new_window()
-    # text = "“难道你还没有吸取教训吗？”"
-    # lineProcess(text)
