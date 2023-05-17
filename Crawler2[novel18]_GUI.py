@@ -138,7 +138,7 @@ def get_novel(url, novel_id, isFileNum): #傳入(主址,小說編號)
     print("下載完畢!")
     
     # 刪除舊資料夾
-    delete_folders_with_keyword( rootDir, 'tmp' )
+    delete_folders_with_keyword( rootDir)
 
     # 使用subprocess打開資料夾，並顯示在最上層
     subprocess.Popen('explorer /select,"' + dirName.replace('/', '\\') + '\\0-首頁導言.txt"')
@@ -203,10 +203,13 @@ def getHeadInt(string):
 
 # 將含有關鍵字的資料夾改名為tmp開頭 (根目錄路徑, 關鍵字)
 def rename_folders_with_keyword(root_folder, keyword):
+    print("#######")
+    print(root_folder)
+    print(keyword)
     for folder_name in os.listdir(root_folder):
         folder_path = os.path.join(root_folder, folder_name)
         if os.path.isdir(folder_path) and keyword in folder_name:
-            new_folder_path = 'tmp' + folder_path
+            new_folder_path = folder_path +'temp'
             # 資料夾改名
             os.rename(folder_path, new_folder_path)
             print("資料夾改名:\n\t原本", folder_path)
@@ -216,7 +219,7 @@ def rename_folders_with_keyword(root_folder, keyword):
 def delete_folders_with_keyword(root_folder):
     for folder_name in os.listdir(root_folder):
         folder_path = os.path.join(root_folder, folder_name)
-        if os.path.isdir(folder_path) and folder_name[:3] == 'tmp':
+        if os.path.isdir(folder_path) and folder_name[len(folder_name)-4:len(folder_name):] == 'temp':
             # 遞迴刪除資料夾及其內容
             shutil.rmtree(folder_path)
             print("刪除資料夾:", folder_path)
@@ -241,9 +244,9 @@ def new_window():
         return False if var.get()==0 else True
     myradiobutton1 = tk.Radiobutton(window, text='是', variable=var, value=1, command=selection)
     myradiobutton1.grid(row=0, column=1, sticky='W')
+    myradiobutton1.select() #選取狀態
     myradiobutton2 = tk.Radiobutton(window, text='否', variable=var, value=0, command=selection)
     myradiobutton2.grid(row=0, column=2, sticky='W')
-    myradiobutton2.select() #選取狀態
 
     # ---------- row=1 ---------- 
     
