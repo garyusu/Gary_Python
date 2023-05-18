@@ -18,7 +18,7 @@ url = "https://novel18.syosetu.com" #小說18主頁
 cookie = 'over18=yes;'
 
 headers={ #可能需改動項目2
-    'Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+    'Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
     # 'Accept-Encoding':'gzip, deflate, br', 
     # 'Accept-Language':'zh-TW,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6,ja;q=0.5',
     # 'Host': 'ncode.syosetu.com',  #有時會改這個
