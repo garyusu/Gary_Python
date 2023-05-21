@@ -9,7 +9,10 @@ import shutil       #刪除資料夾及內容
 import tkinter as tk
 import re
 import os
+import os.path
 import unicodedata
+
+from decimal import Decimal #處理小數位計算，避免float產生誤差
 
 
 url = "https://novel18.syosetu.com" #小說18主頁
@@ -29,10 +32,13 @@ headers={ #可能需改動項目2
 }  
 
 #從網頁抓取小說
-def get_novel(url, novel_id, isFileNum): #傳入(主址,小說編號)
+def get_novel(url, novel_id): #傳入(主址,小說編號)
     url_novel = url + novel_id #小說目錄連結
 
-    req = requests.get(url_novel, headers = headers)
+    try:
+        req = requests.get(url_novel, headers = headers)
+    except Exception as e:
+        print("連接失敗 => ", e)
     soup = bs(req.text, "html.parser")
     # print(soup)
     if req.status_code != 200:
@@ -88,76 +94,92 @@ def get_novel(url, novel_id, isFileNum): #傳入(主址,小說編號)
     #小說首頁簡介
     with open(dirName + '/' + '0-首頁導言.txt', 'w', encoding="utf-8") as f:
         f.write(remove_tag(str(novel_ex[0])))
-    
+
     isBigChapter = len(bigChapter_list) > 0 #有無大章節
     tmp_dirName = dirName                  
-    a = 0   #大章節index，從0開始
-    b = 1   #檔案開頭編號(選擇了 加上編號：是)
-    headNumStr = '' #章節開頭編號
-    c = 1   #章節開頭編號加上小數點的計數
+    a = 0                       #大章節index，從0開始
+    b = 1                       #總章節計數
+    chapterInt = Decimal('0')   #文檔編號
+    # 檢查章名中是否開頭為【第】，回傳 '第' or ''
+    firstStr = checkBigChapterList(novel_list)
+
     for nl in novel_list: #逐一取得章節
         nl_text = toFileName(nl.text) #章節名
 
         # 有大章節的話，將檔案放到各大章資料夾
         if isBigChapter:
-            if bigChapter_firstChild[a].text == nl.text:    #大章第一章，重置檔案開頭編號
+            if bigChapter_firstChild[a].text == nl.text:    # 大章第一章，重置檔案開頭編號
                 tmp_dirName = bigChapterPaths[a]
                 print('\n章節標題'+str(a+1)+'：'+bigChapter_list[a].text)
-                b = 1 
+                chapterInt = Decimal('0')                   # 重置
                 
-            if bigChapter_lastChild[a] != '':               #[大章最後章]以外的，將大章計數+1
+            if bigChapter_lastChild[a] != '':               # [大章最後章]以外的，將大章計數+1
                 if bigChapter_lastChild[a].text == nl.text:
                     a+=1
-        
         # 進章節連結
         url_href = url + nl['href'] #章節連結
         r2 = requests.get(url_href, headers = headers)
         r2.encoding = r2.apparent_encoding #轉碼
         soup2 = bs(r2.text , "html.parser").select('div#novel_honbun') #小說內文
 
-        if isFileNum:   #檔名 (加上編號)
-            ch_name = str(b) + '-' + nl_text + '.txt'    
-        else:           #檔名 (不加編號)
-            #擷取章節開頭的數字，開頭不是數字就上一章編號加上小數
-            if headIsInt(nl_text):
-                headNumStr = getHeadInt(nl_text)
-                ch_name = nl_text + '.txt'  
-                c = 1 #重置小數
-            else:
-                headNumStr += '-' + str(c) + ' '
-                c += 1 #有連續多個沒編號
-                ch_name = headNumStr + nl_text + '.txt' 
-        print(ch_name)
+        # 取章節編號
+        tmp_chapterInt =  getHeadNum(nl_text) #False
 
-        with open(tmp_dirName + '/' + ch_name, 'w', encoding="utf-8") as txt:
+        # 文檔完整路徑
+        path = tmp_dirName + '/' + nl_text + '.txt'
+
+        # 檢查章名重複，重複則改額外給編號
+        if isDuplicate(path):
+            tmp_chapterInt = False
+            print('章名重複，加上開頭編號')
+
+        # 若成功取得章節編號，無須額外給編號
+        if tmp_chapterInt:
+            chapterInt = tmp_chapterInt
+        else:
+            chapterInt += Decimal('0.1')
+            nl_text = firstStr + str(chapterInt) + '-' + nl_text    
+        
+        print(nl_text)
+
+        # 重設文檔完整路徑
+        path = tmp_dirName + '/' + nl_text + '.txt'
+        
+        # 寫入章節內文
+        with open( path, 'w', encoding="utf-8") as txt:
             txt.write(nl.text + "\t" + po_date[b-1].text + '\n\n\n') #寫入開頭標題
             for s in soup2: #逐行處理
                 sr = remove_tag(str(s)) #移除tag
                 txt.write(sr + '\n')
-        b = b + 1
+        b += 1
     print("下載完畢!")
     
     # 刪除舊資料夾
     delete_folders_with_keyword( rootDir)
 
     # 使用subprocess打開資料夾，並顯示在最上層
-    subprocess.Popen('explorer /select,"' + dirName.replace('/', '\\') + '\\0-首頁導言.txt"')
+    folder_path = dirName.replace('/','\\')+'\\'
+    command = f'explorer /select,"{folder_path}"'
+    # subprocess.Popen('explorer /select,"' + dirName.replace('/', '\\') + '\\0-首頁導言.txt"')
+    subprocess.run(command, shell=True)
 # END ==============================================
 
 # 檢查特殊字元，用全形取代特殊字元，避免不符檔名規則
 def toFileName(string):
-    string = full2half(string)            #全形轉半形
-    string = re.sub(r'^\s+?',"",string)   #消除前面空白
-    flag = False
-    for i in string: #逐一比對
-        if i=='\\' or i=='/' or i==':' or i=='*' or i=='?' or i=='<' or i=='>' or i=='|':
-            flag = True
-    if flag: #替換成全形
-        string = string.replace('\\','＼').replace('/','／').replace(':','：')
-        string = string.replace('*','＊').replace('?','？').replace('<','＜')
-        string = string.replace('>','＞').replace('|','｜')
-    return string.replace('―','—')
-    # return string
+    string = full2half(string)    #全形轉半形
+    string = string.strip()       #消除前後空白
+    string = re.sub(r'(\d)ー(\d)', r'\1'+"-"+r'\2', string) # 替換數字間的特殊間隔線
+
+    #替換特殊符號
+    newString = ''
+    before = ['\\', '/',  ':',  '*',  '?', '<',  '>',  '|']
+    after  = ['＼', '／', '：', '＊', '？', '＜', '＞', '｜']
+    for s in string: #逐字比對
+        for i in range(len(before)):
+            if s==before[i]:
+                s = after[i]
+        newString+=s
+    return newString
 
 # 消除<Tag>及強調符(・・) *?為非貪婪匹配，小說內文用
 def remove_tag(text): 
@@ -188,30 +210,29 @@ def getSoupTag(soup ,selectStr):
 def full2half(c: str) -> str:
     return unicodedata.normalize("NFKC", c)
 
-# 判斷字串是否數字
-def headIsInt(string):
-    return string[:1].isnumeric() #Ture/False
-
-# 取得章節開頭的數字 (章節完整名)
-def getHeadInt(string):
-    result = ''
-    for s in string:
-        if not headIsInt(s):
-            break
-        result += s
-    return result
+# 取第一個連續數字，含小數
+def getHeadNum(string):
+    match = re.search(r'^\s*第?[\d\.]+', string)
+    if match:
+        return Decimal(match.group().replace('第', ''))
+    else:
+        return False
 
 # 將含有關鍵字的資料夾改名為tmp開頭 (根目錄路徑, 關鍵字)
 def rename_folders_with_keyword(root_folder, keyword):
-    print("#######")
-    print(root_folder)
-    print(keyword)
+
     for folder_name in os.listdir(root_folder):
         folder_path = os.path.join(root_folder, folder_name)
         if os.path.isdir(folder_path) and keyword in folder_name:
             new_folder_path = folder_path +'temp'
             # 資料夾改名
-            os.rename(folder_path, new_folder_path)
+            try:
+                os.rename(folder_path, new_folder_path)
+            except Exception as e:  #若發生重複，刪掉重複的，再改一次
+                print("資料夾改名時發生異常，將會嘗試移除重複 => ", e)    
+                shutil.rmtree(new_folder_path)
+                print("移除成功")    
+                os.rename(folder_path, new_folder_path)
             print("資料夾改名:\n\t原本", folder_path)
             print("\t改為", new_folder_path)
 
@@ -224,40 +245,40 @@ def delete_folders_with_keyword(root_folder):
             shutil.rmtree(folder_path)
             print("刪除資料夾:", folder_path)
 
+# 檔案是否重複
+def isDuplicate(path):
+    if os.path.isfile(path):
+        return True
+    else:
+        return False
+
+# 檢查章名開頭是否為'第xx'
+def checkBigChapterList(strList):
+    for s in strList:
+        s = s.text.strip()
+        if s[:1] == '第':
+            print("章名開頭為【第】")
+            return '第'
+    return ''
 
 #GUI ===============
 def new_window():  
     window = tk.Tk()
     window.title('新視窗')
-    window.geometry('400x200') #寬x高
+    window.geometry('450x150') #寬x高
     window.maxsize(1280,700)
 
     #元件類別(父類別, 選擇性參數1 = 值1, ...) ，建立元件
     #元件.grid(row=列數, column=行數) ，設定(相對)位置
     # ---------- row=0 ---------- 
-    tk.Label(window, relief="raised", text='加上編號：\n(有大章標題請選取"是")').grid(row=0, column=0)
-
-    #單選按鈕RDO 是/否
-    var = tk.IntVar()
-    #回傳選取 T or F，切換時觸發
-    def selection(): 
-        return False if var.get()==0 else True
-    myradiobutton1 = tk.Radiobutton(window, text='是', variable=var, value=1, command=selection)
-    myradiobutton1.grid(row=0, column=1, sticky='W')
-    myradiobutton1.select() #選取狀態
-    myradiobutton2 = tk.Radiobutton(window, text='否', variable=var, value=0, command=selection)
-    myradiobutton2.grid(row=0, column=2, sticky='W')
-
-    # ---------- row=1 ---------- 
-    
-    # ---------- row=4 ---------- 
     mylabel = tk.Label(window, text='請輸入網址：')
-    mylabel.grid(row=4, column=0)
+    mylabel.grid(row=0, column=0,  ipadx=10, ipady=20)
 
+    # ---------- row=4 ---------- 
     intput_website =tk.StringVar()
     myEntry = tk.Entry(window, textvariable=intput_website, width=40, bg='lightcyan') #文字輸入框
     myEntry.focus() #放入游標
-    myEntry.grid(row=4, column=1, rowspan=1, columnspan=3)
+    myEntry.grid(row=0, column=1, columnspan=3, ipadx=30, ipady=10)
 
     # ---------- row=6 ---------- 
     #正在下載
@@ -274,12 +295,16 @@ def new_window():
 
             #call get_novel開始抓取小說
             mylabel_start.config(text='正在下載...')
-            get_novel( url, get_novel_number(output_website), selection() ) 
-            mylabel_start.config(text='下載完畢!!')
+            try:
+                get_novel( url, get_novel_number(output_website) ) 
+                mylabel_start.config(text='下載完畢!!')
+            except Exception as e:
+                mylabel_start.config(text='下載失敗!! 請重試')
+                print('下載失敗!! 請重試 => ', e)
     
     # ---------- row=7 ----------
     myButton = tk.Button(window, text='開始', command= button_event, bg='orange')
-    myButton.grid(row=7, column=0, rowspan=1, columnspan=3, ipadx=40, ipady=10)
+    myButton.grid(row=7, column=0, rowspan=1, columnspan=4, ipadx=40, ipady=10)
 
     #inp1 = tk.Entry(window, text="Hello World", bg="yellow", fg="#263238", font=('Arial', 20))，進一步元件風格
     
