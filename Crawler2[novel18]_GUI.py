@@ -100,8 +100,9 @@ def get_novel(url, novel_id): #傳入(主址,小說編號)
     a = 0                       #大章節index，從0開始
     b = 1                       #總章節計數
     chapterInt = Decimal('0')   #文檔編號
-    # 檢查章名中是否開頭為【第】，回傳 '第' or ''
-    firstStr = checkBigChapterList(novel_list)
+    # 取章名開頭，回傳 字元 or '' or None
+    firstStr = getBigChapterList(novel_list)
+    print("取章名開頭，回傳", firstStr)
 
     for nl in novel_list: #逐一取得章節
         nl_text = toFileName(nl.text) #章節名
@@ -123,7 +124,11 @@ def get_novel(url, novel_id): #傳入(主址,小說編號)
         soup2 = bs(r2.text , "html.parser").select('div#novel_honbun') #小說內文
 
         # 取章節編號
-        tmp_chapterInt =  getHeadNum(nl_text) #False
+        # print("firstStr",firstStr)
+        if firstStr != None:
+            tmp_chapterInt =  getHeadNum(nl_text, firstStr)
+        else:
+            tmp_chapterInt = False
 
         # 文檔完整路徑
         path = tmp_dirName + '/' + nl_text + '.txt'
@@ -131,14 +136,18 @@ def get_novel(url, novel_id): #傳入(主址,小說編號)
         # 檢查章名重複，重複則改額外給編號
         if isDuplicate(path):
             tmp_chapterInt = False
-            print('章名重複，加上開頭編號')
+            print('\n章名重複，加上開頭編號')
 
         # 若成功取得章節編號，無須額外給編號
         if tmp_chapterInt:
             chapterInt = tmp_chapterInt
         else:
-            chapterInt += Decimal('0.1')
-            nl_text = firstStr + str(chapterInt) + '-' + nl_text    
+            if firstStr == None or firstStr == '第':
+                chapterInt += Decimal('1')
+                nl_text = str(chapterInt) + '-' + nl_text 
+            else:
+                chapterInt += Decimal('0.1')
+                nl_text = firstStr + str(chapterInt) + '-' + nl_text    
         
         print(nl_text)
 
@@ -211,10 +220,14 @@ def full2half(c: str) -> str:
     return unicodedata.normalize("NFKC", c)
 
 # 取第一個連續數字，含小數
-def getHeadNum(string):
-    match = re.search(r'^\s*第?[\d\.]+', string)
+def getHeadNum(string, firstStr):
+    if firstStr != '':
+        pattern = r'^' + firstStr + r'?([\d\.]+)'
+    else:
+        pattern = r'^([\d\.]+)'
+    match = re.search(pattern, string)
     if match:
-        return Decimal(match.group().replace('第', ''))
+        return Decimal(match.group().replace( firstStr , ''))
     else:
         return False
 
@@ -252,14 +265,45 @@ def isDuplicate(path):
     else:
         return False
 
-# 檢查章名開頭是否為'第xx'
-def checkBigChapterList(strList):
-    for s in strList:
-        s = s.text.strip()
-        if s[:1] == '第':
-            print("章名開頭為【第】")
-            return '第'
-    return ''
+# 判斷章名開頭為何 或 數字 
+# return char/''/None
+def getBigChapterList(strList):
+    countNum = 0    # 計數數字開頭
+    char_count = {} # 创建一个空字典
+    
+    # 遍历字符串列表
+    for string in strList:
+        # 获取字符串的开头字符
+        first_char = toFileName(string.text)[0]
+        second_char = toFileName(string.text)[1]
+        # 數字開頭
+        if first_char.isdigit():
+            countNum += 1
+        # 非數字開頭，但第二位是數字(ex. 第1話)，統計
+        elif second_char.isdigit():
+            # 检查字典中是否存在该开头字符作为键
+            if first_char in char_count:
+                # 如果存在，增加对应的值
+                char_count[first_char] += 1
+            else:
+                # 如果不存在，设置新的键，并将值设置为1
+                char_count[first_char] = 1
+
+    # 超過一半即確定數字開頭
+    if countNum > len(strList)/2:
+        print("\n章名開頭為數字")
+        return ''
+     
+    if len(char_count) > 0:
+        # 找到值最大的键
+        max_count_char = max(char_count, key=char_count.get)
+        # 超過一半即確定單一字開頭，ex.第1話
+        if char_count[max_count_char] > len(strList)/2:
+            print("\n章名開頭為：" + max_count_char)
+            return max_count_char
+    print("\n章名開頭加上編號")
+    return None
+
 
 #GUI ===============
 def new_window():  
@@ -295,12 +339,9 @@ def new_window():
 
             #call get_novel開始抓取小說
             mylabel_start.config(text='正在下載...')
-            try:
-                get_novel( url, get_novel_number(output_website) ) 
-                mylabel_start.config(text='下載完畢!!')
-            except Exception as e:
-                mylabel_start.config(text='下載失敗!! 請重試')
-                print('下載失敗!! 請重試 => ', e)
+            
+            get_novel( url, get_novel_number(output_website) ) 
+            mylabel_start.config(text='下載完畢!!')
     
     # ---------- row=7 ----------
     myButton = tk.Button(window, text='開始', command= button_event, bg='orange')
